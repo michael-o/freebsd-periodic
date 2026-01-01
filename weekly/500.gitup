@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# If there is a global system configuration file, suck it in.
+#
+if [ -r /etc/defaults/periodic.conf ]
+then
+    . /etc/defaults/periodic.conf
+    source_periodic_confs
+fi
+
+: ${weekly_gitup_enable:=NO}
+: ${weekly_gitup_sections}
+: ${_localbase:=/usr/local}
+: ${weekly_gitup_path:="$_localbase/bin/gitup"}
+
+run_gitup() {
+  local rc=0
+  local last_rc
+
+  for s in $weekly_gitup_sections; do
+    echo "Pulling $s:"
+    $weekly_gitup_path -v 0 $s
+    last_rc=$?
+    if [ $last_rc -eq 2 ]
+    then
+      $weekly_gitup_path -v 0 $s
+      last_rc=$?
+    fi
+    [ $last_rc -ne 0 ] && rc=3
+  done
+
+  return $rc
+}
+
+case "$weekly_gitup_enable" in
+  [Yy][Ee][Ss])
+    if [ ! -x "$weekly_gitup_path" ]
+    then
+      echo '$weekly_gitup_enable is set but' \
+        "$weekly_gitup_path isn't executable"
+      rc=2
+    elif [ -z "$weekly_gitup_sections" ]
+    then
+      echo '$weekly_gitup_enable is set but' \
+        '$weekly_gitup_sections is not'
+      rc=2
+    else
+      echo ""
+      echo "Running gitup:"
+      run_gitup ; rc=$?
+    fi;;
+
+  *) rc=0;;
+esac
+
+exit "$rc"

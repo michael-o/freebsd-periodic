@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# If there is a global system configuration file, suck it in.
+#
+if [ -r /etc/defaults/periodic.conf ]
+then
+    . /etc/defaults/periodic.conf
+    source_periodic_confs
+fi
+
+: ${weekly_make_src_enable:=NO}
+: ${weekly_make_src_targets}
+: ${weekly_make_src_jobs=$(( ($(sysctl -n kern.smp.cpus) + 1) / 2 ))}
+
+run_make_src() {
+  local rc=0
+  local last_rc
+
+  for t in $weekly_make_src_targets; do
+    echo "Making $t:"
+    echo "    (output logged separately)"
+    make -C /usr/src -s -j $weekly_make_src_jobs $t > /var/log/weekly-make-src-$t.log 2>&1
+    last_rc=$?
+    if [ $last_rc -ne 0 ]
+    then
+      echo "    ...failed"
+      echo "...skipping remaining targets"
+      return 3
+    fi
+  done
+
+  return $rc
+}
+
+case "$weekly_make_src_enable" in
+  [Yy][Ee][Ss])
+    if [ -z "$weekly_make_src_targets" ]
+    then
+      echo '$weekly_make_src_enable is set but' \
+        '$weekly_make_src_targets is not'
+      rc=2
+    else
+      echo ""
+      echo "Running make-src:"
+      run_make_src ; rc=$?
+    fi;;
+
+  *) rc=0;;
+esac
+
+exit "$rc"
